@@ -1,1 +1,100 @@
-<!-- -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real World RPG</title>
+    <!-- Three.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+    <!-- DeviceOrientation controls from three.js examples -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/controls/DeviceOrientationControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #overlay { position: absolute; top: 10px; left: 10px; color: white; z-index: 1; }
+    </style>
+</head>
+<body>
+<div id="overlay">Loading...</div>
+<script>
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Simple ambient light
+    const light = new THREE.HemisphereLight(0xffffff, 0x444444);
+    scene.add(light);
+
+    // Device orientation controls
+    let controls = new THREE.DeviceOrientationControls(camera);
+
+    // Fetch world data from server
+    async function loadWorld(lat, lon) {
+        const remoteUrl = `https://example.com/api/world?lat=${lat}&lon=${lon}`; // Placeholder server
+        try {
+            const res = await fetch(remoteUrl);
+            if (!res.ok) throw new Error('Failed to load world data');
+            const data = await res.json();
+            buildWorld(data, lat, lon);
+        } catch (e) {
+            console.warn('Remote fetch failed, falling back to local data');
+            try {
+                const localRes = await fetch('world-data.json');
+                const localData = await localRes.json();
+                buildWorld(localData, lat, lon);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('overlay').textContent = 'Failed to load world data';
+            }
+        }
+    }
+
+    // Convert lat/lon to simple planar coordinates (very naive)
+    function latLonToXY(lat, lon, originLat, originLon) {
+        const R = 6371000; // Earth radius in meters
+        const x = (lon - originLon) * Math.PI/180 * R * Math.cos(originLat*Math.PI/180);
+        const y = (lat - originLat) * Math.PI/180 * R;
+        return { x, y };
+    }
+
+    // Build world objects from data
+    function buildWorld(data, originLat, originLon) {
+        (data.objects || []).forEach(obj => {
+            const pos = latLonToXY(obj.lat, obj.lon, originLat, originLon);
+            const geometry = new THREE.BoxGeometry(obj.size, obj.size, obj.size);
+            const material = new THREE.MeshNormalMaterial();
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(pos.x, 0, pos.y); // y-axis up
+            scene.add(cube);
+        });
+        document.getElementById('overlay').textContent = '';
+    }
+
+    // Get current position and load world
+    navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        camera.position.set(0, 1.6, 0); // typical eye height
+        loadWorld(latitude, longitude);
+    }, err => {
+        document.getElementById('overlay').textContent = 'Geolocation failed';
+        console.error(err);
+    }, { enableHighAccuracy: true });
+
+    // Render loop
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>

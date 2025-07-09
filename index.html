@@ -71,6 +71,7 @@
 </div>
 
 <script>
+window.addEventListener('load', () => {
 // ----- CONFIGURATION -----
 const MAP_WIDTH = 96, MAP_HEIGHT = 32;
 const CAMERA_WIDTH = 32, CAMERA_HEIGHT = 12;
@@ -211,6 +212,7 @@ let npc=gameData.npcs.find(n=>n.x===wx&&n.y===wy);if(npc){ctx.fillStyle=npc.colo
 if(wx===playerX&&wy===playerY){ctx.fillStyle=gameData.specialTiles.PLAYER;ctx.beginPath();ctx.arc(sx,sy+4,6,0,Math.PI*2);ctx.fill();}}}}
 
 requestAnimationFrame(gameLoop);
+});
 </script>
 </body>
 </html>

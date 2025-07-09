@@ -66,7 +66,7 @@
             const geometry = new THREE.BoxGeometry(obj.size, obj.size, obj.size);
             const material = new THREE.MeshNormalMaterial();
             const cube = new THREE.Mesh(geometry, material);
-            cube.position.set(pos.x, 0, pos.y); // y-axis up
+            cube.position.set(pos.x, obj.size / 2, pos.y); // lift so base sits on ground
             scene.add(cube);
         });
         document.getElementById('overlay').textContent = '';

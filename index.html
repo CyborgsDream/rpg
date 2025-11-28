@@ -46,6 +46,15 @@
     #commandsHelp ul { list-style: none; margin: 0; padding: 0; }
     #commandsHelp li { margin-bottom: .3rem; }
     #commandsHelp strong { color: #fff; }
+    #shareControls { margin-top: 1rem; }
+    #shareControls button { padding: 0.4rem 0.8rem; font-size: 14px; cursor: pointer; }
+    #shareModal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; }
+    #shareModal.open { display: flex; }
+    #shareModal .modalContent { background: #111; border: 1px solid #555; padding: 1rem; width: 320px; box-shadow: 0 0 12px rgba(0,0,0,0.5); }
+    #shareModal .modalContent h3 { margin-top: 0; }
+    #shareModal .modalContent input { width: 100%; padding: 0.4rem; margin: 0.5rem 0; border: 1px solid #444; background: #000; color: #fff; }
+    #shareModal .modalActions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+    #shareModal .modalActions button { padding: 0.4rem 0.8rem; }
   </style>
 </head>
 <body>
@@ -57,6 +66,9 @@
     <div id="playerStats"></div>
     <div id="messages"></div>
     <div id="dialogues"></div>
+    <div id="shareControls">
+      <button id="openShareModal">Share game</button>
+    </div>
     <div id="commandsHelp">
       <strong>Commands (Ultima + KC):</strong>
       <ul>
@@ -71,6 +83,19 @@
   </div>
 </div>
 
+<div id="shareModal" aria-modal="true" role="dialog">
+  <div class="modalContent">
+    <h3>Share this adventure</h3>
+    <p>Copy the link below to share the current game.</p>
+    <input id="shareLink" type="text" readonly value="" />
+    <div class="modalActions">
+      <button id="copyShareLink">Copy link</button>
+      <button id="closeShareModal">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="share-modal.js"></script>
 <script>
 // ----- CONFIGURATION -----
 const MAP_WIDTH = 128, MAP_HEIGHT = 48;
@@ -358,63 +383,62 @@ function render(){
         pt.sx+=centerX;
         pt.sy+=centerY;
       }
+        const tileName=map[wy][wx];
+        const td=gameData.tileDefs[tileName]||gameData.tileDefs.GRASS;
+        const avgH=(hNW+hNE+hSW+hSE)/4;
+        const topColor=shadeColor(td.color,-avgH*10);
+        const leftColor=shadeColor(topColor,-25);
+        const rightColor=shadeColor(topColor,-15);
+        const frontColor=shadeColor(topColor,-35);
+        const center=isoPoint(rx+0.5,ry+0.5,avgH);
+        center.sx+=centerX;center.sy+=centerY;
 
-      const tileName=map[wy][wx];
-      const td=gameData.tileDefs[tileName]||gameData.tileDefs.GRASS;
-      const avgH=(hNW+hNE+hSW+hSE)/4;
-      const topColor=shadeColor(td.color,-avgH*10);
-      const leftColor=shadeColor(topColor,-25);
-      const rightColor=shadeColor(topColor,-15);
-      const frontColor=shadeColor(topColor,-35);
+        if(Math.max(hNW,hSW)>baseHeight){
+          drawTile(pNW,pSW,bSW,bNW,leftColor);
+        }
+        if(Math.max(hNE,hSE)>baseHeight){
+          drawTile(pNE,pSE,bSE,bNE,rightColor);
+        }
+        if(Math.max(hSW,hSE)>baseHeight){
+          drawTile(pSW,pSE,bSE,bSW,frontColor);
+        }
 
-      if(Math.max(hNW,hSW)>baseHeight){
-        drawTile(pNW,pSW,bSW,bNW,leftColor);
-      }
-      if(Math.max(hNE,hSE)>baseHeight){
-        drawTile(pNE,pSE,bSE,bNE,rightColor);
-      }
-      if(Math.max(hSW,hSE)>baseHeight){
-        drawTile(pSW,pSE,bSE,bSW,frontColor);
-      }
+        drawTile(pNW,pNE,pSE,pSW,topColor);
 
-      drawTile(pNW,pNE,pSE,pSW,topColor);
+        if (tileName==="ROAD") {
+          const centerPoint = { sx: center.sx, sy: center.sy + 4 };
+          const insetFactor = 0.62;
+          const inset = (pt) => ({
+            sx: centerPoint.sx + (pt.sx - centerPoint.sx) * insetFactor,
+            sy: centerPoint.sy + (pt.sy - centerPoint.sy) * insetFactor,
+          });
+          const rNW = inset(pNW);
+          const rNE = inset(pNE);
+          const rSE = inset(pSE);
+          const rSW = inset(pSW);
 
-      if (tileName==="ROAD") {
-        const centerPoint = { sx: center.sx, sy: center.sy + 4 };
-        const insetFactor = 0.62;
-        const inset = (pt) => ({
-          sx: centerPoint.sx + (pt.sx - centerPoint.sx) * insetFactor,
-          sy: centerPoint.sy + (pt.sy - centerPoint.sy) * insetFactor,
-        });
-        const rNW = inset(pNW);
-        const rNE = inset(pNE);
-        const rSE = inset(pSE);
-        const rSW = inset(pSW);
+          ctx.fillStyle = "#e0e0e0";
+          ctx.beginPath();
+          ctx.moveTo(rNW.sx, rNW.sy);
+          ctx.lineTo(rNE.sx, rNE.sy);
+          ctx.lineTo(rSE.sx, rSE.sy);
+          ctx.lineTo(rSW.sx, rSW.sy);
+          ctx.closePath();
+          ctx.fill();
 
-        ctx.fillStyle = "#e0e0e0";
-        ctx.beginPath();
-        ctx.moveTo(rNW.sx, rNW.sy);
-        ctx.lineTo(rNE.sx, rNE.sy);
-        ctx.lineTo(rSE.sx, rSE.sy);
-        ctx.lineTo(rSW.sx, rSW.sy);
-        ctx.closePath();
-        ctx.fill();
+          ctx.strokeStyle = "#777";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(rNW.sx, rNW.sy);
+          ctx.lineTo(rNE.sx, rNE.sy);
+          ctx.lineTo(rSE.sx, rSE.sy);
+          ctx.lineTo(rSW.sx, rSW.sy);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.lineWidth = 1;
+        }
 
-        ctx.strokeStyle = "#777";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(rNW.sx, rNW.sy);
-        ctx.lineTo(rNE.sx, rNE.sy);
-        ctx.lineTo(rSE.sx, rSE.sy);
-        ctx.lineTo(rSW.sx, rSW.sy);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.lineWidth = 1;
-      }
-
-      const center=isoPoint(rx+0.5,ry+0.5,avgH);
-      center.sx+=centerX;center.sy+=centerY;
-      const proj=gameData.projectiles.find(p=>p.x===wx&&p.y===wy);
+        const proj=gameData.projectiles.find(p=>p.x===wx&&p.y===wy);
       if(proj){ctx.fillStyle=gameData.specialTiles.FIREBALL.color;ctx.beginPath();ctx.arc(center.sx,center.sy+4,4,0,Math.PI*2);ctx.fill();}
       const it=gameData.items.find(i=>!i.taken&&i.x===wx&&i.y===wy);
       if(it){ctx.fillStyle=gameData.specialTiles.ITEM.color;ctx.beginPath();ctx.moveTo(center.sx,center.sy+2);ctx.lineTo(center.sx+4,center.sy+TILE_H/2);ctx.lineTo(center.sx,center.sy+TILE_H-2);ctx.lineTo(center.sx-4,center.sy+TILE_H/2);ctx.closePath();ctx.fill();}

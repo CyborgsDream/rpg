@@ -115,7 +115,8 @@ const gameData = {
     CITY: { color: "#fa4", passable: true },
     VILLAGE: { color: "#e7c07d", passable: true },
     TOWER: { color: "#ccbbee", passable: false },
-    FARM: { color: "#d8bf8e", passable: true }
+    FARM: { color: "#d8bf8e", passable: true },
+    BUILDING: { color: "#b8c0d4", passable: false }
   },
   specialTiles: {
     NPC: { color: "#0cf" },
@@ -178,11 +179,9 @@ let map = Array.from({length: MAP_HEIGHT}, () => Array(MAP_WIDTH).fill("GRASS"))
 
 let heightMap = Array.from({length: MAP_HEIGHT+1}, () => Array(MAP_WIDTH+1).fill(0));
 
-function randElem(arr){return arr[Math.floor(Math.random()*arr.length)];}
-const baseTerrains=["GRASS","FOREST","MOUNTAIN","HILL","WATER"];
 for(let y=0;y<=MAP_HEIGHT;y++){
   for(let x=0;x<=MAP_WIDTH;x++){
-    let h=Math.floor(Math.random()*3);
+    let h=Math.floor(Math.random()*4);
     if(x>0&&y>0){
       h=Math.round((h+heightMap[y-1][x]+heightMap[y][x-1]+heightMap[y-1][x-1])/4);
     }else if(x>0){
@@ -190,14 +189,6 @@ for(let y=0;y<=MAP_HEIGHT;y++){
     }else if(y>0){
       h=Math.round((h+heightMap[y-1][x])/2);
     }
-    heightMap[y][x]=h;
-  }
-}
-for(let y=0;y<MAP_HEIGHT;y++){
-  for(let x=0;x<MAP_WIDTH;x++){
-    map[y][x]=randElem(baseTerrains);
-    let h=Math.floor(Math.random()*3);
-    if(x>0&&y>0) h=Math.round((h+heightMap[y-1][x]+heightMap[y][x-1])/3);
     heightMap[y][x]=h;
   }
 }
@@ -220,6 +211,19 @@ for(let smooth=0;smooth<2;smooth++){
   heightMap=next;
 }
 
+for(let y=0;y<MAP_HEIGHT;y++){
+  for(let x=0;x<MAP_WIDTH;x++){
+    const avgH=(heightMap[y][x]+heightMap[y+1][x]+heightMap[y][x+1]+heightMap[y+1][x+1])/4;
+    if(avgH<=0){
+      map[y][x]=Math.random()<0.75?"WATER":"GRASS";
+    }else if(avgH<2){
+      map[y][x]=Math.random()<0.28?"FOREST":"GRASS";
+    }else{
+      map[y][x]=Math.random()<0.7?"HILL":"MOUNTAIN";
+    }
+  }
+}
+
 function roadBrush(x,y,width){
   for(let dy=-width+1;dy<width;dy++){
     for(let dx=-width+1;dx<width;dx++){
@@ -235,6 +239,34 @@ function carveRoad(x1,y1,x2,y2,width=1){
   while(cx!==x2||cy!==y2){
     if(Math.abs(x2-cx)>Math.abs(y2-cy)) cx+= (x2>cx?1:-1); else cy+= (y2>cy?1:-1);
     roadBrush(cx,cy,width);
+  }
+}
+
+function vertexTouchesRoad(vx,vy){
+  const touchesTile=(tx,ty)=>tx>=0&&ty>=0&&tx<MAP_WIDTH&&ty<MAP_HEIGHT&&map[ty][tx]==="ROAD";
+  return touchesTile(vx-1,vy-1)||touchesTile(vx,vy-1)||touchesTile(vx-1,vy)||touchesTile(vx,vy);
+}
+
+function smoothRoadHeights(iterations=3){
+  for(let s=0;s<iterations;s++){
+    const next=heightMap.map(r=>r.slice());
+    for(let y=0;y<=MAP_HEIGHT;y++){
+      for(let x=0;x<=MAP_WIDTH;x++){
+        if(!vertexTouchesRoad(x,y)) continue;
+        let acc=0,count=0;
+        for(let dy=-1;dy<=1;dy++){
+          for(let dx=-1;dx<=1;dx++){
+            const nx=x+dx,ny=y+dy;
+            if(nx<0||ny<0||nx>MAP_WIDTH||ny>MAP_HEIGHT) continue;
+            if(!vertexTouchesRoad(nx,ny)) continue;
+            acc+=heightMap[ny][nx];
+            count++;
+          }
+        }
+        if(count>0) next[y][x]=Math.round(acc/count);
+      }
+    }
+    heightMap=next;
   }
 }
 
@@ -263,6 +295,9 @@ placeRect(50,6,3,3,"TOWER");
 placeRect(90,26,5,4,"VILLAGE");
 placeRect(94,22,4,3,"FARM");
 placeRect(112,34,6,4,"CITY");
+placeRect(58,14,3,3,"BUILDING");
+placeRect(84,18,4,3,"BUILDING");
+placeRect(104,30,5,3,"BUILDING");
 
 // Road network linking notable spots and adding major arteries
 const midY=Math.floor(MAP_HEIGHT/2);
@@ -294,6 +329,8 @@ const spurConnections=[
   [{x:midX,y:midY},{x:90,y:26}]
 ];
 spurConnections.forEach(([a,b])=>carveRoad(a.x,a.y,b.x,b.y));
+
+smoothRoadHeights();
 
 let isRunning=true;
 let score=0;
@@ -476,7 +513,8 @@ function render(){
           CITY:{color:"#cfd5e8",height:16,inset:0.6},
           VILLAGE:{color:"#d9b07b",height:12,inset:0.64},
           TOWER:{color:"#c6c0ea",height:22,inset:0.64},
-          FARM:{color:"#c9a871",height:10,inset:0.68}
+          FARM:{color:"#c9a871",height:10,inset:0.68},
+          BUILDING:{color:"#b8c0d4",height:14,inset:0.62}
         };
         if(buildingStyles[tileName]){
           const {color,height,inset}=buildingStyles[tileName];

@@ -178,12 +178,21 @@ for(let y=0;y<MAP_HEIGHT;y++){
   }
 }
 
-function carveRoad(x1,y1,x2,y2){
+function roadBrush(x,y,width){
+  for(let dy=-width+1;dy<width;dy++){
+    for(let dx=-width+1;dx<width;dx++){
+      const rx=x+dx, ry=y+dy;
+      if(rx>=0&&ry>=0&&rx<MAP_WIDTH&&ry<MAP_HEIGHT) map[ry][rx]="ROAD";
+    }
+  }
+}
+
+function carveRoad(x1,y1,x2,y2,width=1){
   let cx=x1, cy=y1;
-  map[cy][cx]="ROAD";
+  roadBrush(cx,cy,width);
   while(cx!==x2||cy!==y2){
     if(Math.abs(x2-cx)>Math.abs(y2-cy)) cx+= (x2>cx?1:-1); else cy+= (y2>cy?1:-1);
-    if(cx>=0&&cy>=0&&cx<MAP_WIDTH&&cy<MAP_HEIGHT) map[cy][cx]="ROAD";
+    roadBrush(cx,cy,width);
   }
 }
 
@@ -213,7 +222,14 @@ placeRect(90,26,5,4,"VILLAGE");
 placeRect(94,22,4,3,"FARM");
 placeRect(112,34,6,4,"CITY");
 
-// Road network linking notable spots
+// Road network linking notable spots and adding major arteries
+const midY=Math.floor(MAP_HEIGHT/2);
+const midX=Math.floor(MAP_WIDTH/2);
+carveRoad(0,midY,MAP_WIDTH-1,midY,2);            // west-east great road
+carveRoad(midX,0,midX,MAP_HEIGHT-1,2);           // north-south trade route
+carveRoad(0,8,MAP_WIDTH-1,midY+6,1);             // diagonal caravan path
+carveRoad(6,midY+10,MAP_WIDTH-12,6,1);           // second diagonal for variety
+
 const roadNodes=[
   {x:10,y:10}, // spawn
   {x:32,y:20}, // castle
@@ -224,8 +240,18 @@ const roadNodes=[
   {x:114,y:36} // eastern city
 ];
 for(let i=0;i<roadNodes.length-1;i++){
-  carveRoad(roadNodes[i].x,roadNodes[i].y,roadNodes[i+1].x,roadNodes[i+1].y);
+  carveRoad(roadNodes[i].x,roadNodes[i].y,roadNodes[i+1].x,roadNodes[i+1].y,2);
 }
+
+// Spurs from main arteries to settlements for denser coverage
+const spurConnections=[
+  [{x:midX,y:midY},{x:10,y:10}],
+  [{x:midX,y:midY},{x:70,y:midY-12}],
+  [{x:midX,y:midY},{x:112,y:34}],
+  [{x:midX,y:midY},{x:18,y:30}],
+  [{x:midX,y:midY},{x:90,y:26}]
+];
+spurConnections.forEach(([a,b])=>carveRoad(a.x,a.y,b.x,b.y));
 
 let isRunning=true;
 let score=0;

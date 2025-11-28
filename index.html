@@ -177,13 +177,12 @@ const gameData = {
 let map = Array.from({length: MAP_HEIGHT}, () => Array(MAP_WIDTH).fill("GRASS"));
 
 let heightMap = Array.from({length: MAP_HEIGHT+1}, () => Array(MAP_WIDTH+1).fill(0));
-<!-- let heightMap = Array.from({length: MAP_HEIGHT}, () => Array(MAP_WIDTH).fill(0)); -->
 
 function randElem(arr){return arr[Math.floor(Math.random()*arr.length)];}
 const baseTerrains=["GRASS","FOREST","MOUNTAIN","HILL","WATER"];
 for(let y=0;y<=MAP_HEIGHT;y++){
   for(let x=0;x<=MAP_WIDTH;x++){
-    let h=Math.floor(Math.random()*4);
+    let h=Math.floor(Math.random()*3);
     if(x>0&&y>0){
       h=Math.round((h+heightMap[y-1][x]+heightMap[y][x-1]+heightMap[y-1][x-1])/4);
     }else if(x>0){
@@ -197,10 +196,28 @@ for(let y=0;y<=MAP_HEIGHT;y++){
 for(let y=0;y<MAP_HEIGHT;y++){
   for(let x=0;x<MAP_WIDTH;x++){
     map[y][x]=randElem(baseTerrains);
-    let h=Math.floor(Math.random()*4);
+    let h=Math.floor(Math.random()*3);
     if(x>0&&y>0) h=Math.round((h+heightMap[y-1][x]+heightMap[y][x-1])/3);
     heightMap[y][x]=h;
   }
+}
+for(let smooth=0;smooth<2;smooth++){
+  const next=heightMap.map(arr=>arr.slice());
+  for(let y=0;y<=MAP_HEIGHT;y++){
+    for(let x=0;x<=MAP_WIDTH;x++){
+      let acc=0,count=0;
+      for(let dy=-1;dy<=1;dy++){
+        for(let dx=-1;dx<=1;dx++){
+          const ny=y+dy,nx=x+dx;
+          if(nx<0||ny<0||nx>MAP_WIDTH||ny>MAP_HEIGHT) continue;
+          acc+=heightMap[ny][nx];
+          count++;
+        }
+      }
+      next[y][x]=Math.round(acc/count*0.9);
+    }
+  }
+  heightMap=next;
 }
 
 function roadBrush(x,y,width){
@@ -303,8 +320,9 @@ function resizeCanvas(){
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-function isNPCat(nx,ny){return gameData.npcs.find(n=>n.x===nx&&n.y===ny);} 
-function isPassable(nx,ny){if(nx<0||ny<0||nx>=MAP_WIDTH||ny>=MAP_HEIGHT) return false;let npc=isNPCat(nx,ny);if(npc) return false;let td=gameData.tileDefs[map[ny][nx]]||gameData.tileDefs.GRASS;return td.passable!==false;} 
+function isNPCat(nx,ny){return gameData.npcs.find(n=>n.x===nx&&n.y===ny);}
+function isPassable(nx,ny){if(nx<0||ny<0||nx>=MAP_WIDTH||ny>=MAP_HEIGHT) return false;let npc=isNPCat(nx,ny);if(npc) return false;let td=gameData.tileDefs[map[ny][nx]]||gameData.tileDefs.GRASS;return td.passable!==false;}
+function isRoad(nx,ny){return nx>=0&&ny>=0&&nx<MAP_WIDTH&&ny<MAP_HEIGHT&&map[ny][nx]==="ROAD";}
 function isAdjacent(px,py,nx,ny){return Math.abs(px-nx)+Math.abs(py-ny)===1;}
 
 let npcMoveInterval=1000,lastNPCmove=0;
@@ -407,35 +425,78 @@ function render(){
 
         if (tileName==="ROAD") {
           const centerPoint = { sx: center.sx, sy: center.sy + 4 };
-          const insetFactor = 0.62;
-          const inset = (pt) => ({
-            sx: centerPoint.sx + (pt.sx - centerPoint.sx) * insetFactor,
-            sy: centerPoint.sy + (pt.sy - centerPoint.sy) * insetFactor,
-          });
-          const rNW = inset(pNW);
-          const rNE = inset(pNE);
-          const rSE = inset(pSE);
-          const rSW = inset(pSW);
+          const edges={
+            N:{pt:{sx:(pNW.sx+pNE.sx)/2,sy:(pNW.sy+pNE.sy)/2}},
+            S:{pt:{sx:(pSW.sx+pSE.sx)/2,sy:(pSW.sy+pSE.sy)/2}},
+            W:{pt:{sx:(pNW.sx+pSW.sx)/2,sy:(pNW.sy+pSW.sy)/2}},
+            E:{pt:{sx:(pNE.sx+pSE.sx)/2,sy:(pNE.sy+pSE.sy)/2}}
+          };
+          const neighbors={
+            N:isRoad(wx,wy-1),
+            S:isRoad(wx,wy+1),
+            W:isRoad(wx-1,wy),
+            E:isRoad(wx+1,wy)
+          };
 
-          ctx.fillStyle = "#e0e0e0";
+          ctx.lineCap="round";
+          ctx.strokeStyle="#dcd7c8";
+          ctx.lineWidth=10;
           ctx.beginPath();
-          ctx.moveTo(rNW.sx, rNW.sy);
-          ctx.lineTo(rNE.sx, rNE.sy);
-          ctx.lineTo(rSE.sx, rSE.sy);
-          ctx.lineTo(rSW.sx, rSW.sy);
-          ctx.closePath();
-          ctx.fill();
-
-          ctx.strokeStyle = "#777";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(rNW.sx, rNW.sy);
-          ctx.lineTo(rNE.sx, rNE.sy);
-          ctx.lineTo(rSE.sx, rSE.sy);
-          ctx.lineTo(rSW.sx, rSW.sy);
-          ctx.closePath();
+          ctx.moveTo(centerPoint.sx,centerPoint.sy);
+          for(const dir of Object.keys(neighbors)){
+            if(neighbors[dir]){
+              ctx.lineTo(edges[dir].pt.sx,edges[dir].pt.sy);
+              ctx.moveTo(centerPoint.sx,centerPoint.sy);
+            }
+          }
+          if(Object.values(neighbors).every(v=>!v)){
+            ctx.lineTo(centerPoint.sx,centerPoint.sy+0.1);
+          }
           ctx.stroke();
-          ctx.lineWidth = 1;
+
+          ctx.strokeStyle="#9b9484";
+          ctx.lineWidth=4;
+          ctx.beginPath();
+          ctx.moveTo(centerPoint.sx,centerPoint.sy);
+          for(const dir of Object.keys(neighbors)){
+            if(neighbors[dir]){
+              ctx.lineTo(edges[dir].pt.sx,edges[dir].pt.sy);
+              ctx.moveTo(centerPoint.sx,centerPoint.sy);
+            }
+          }
+          if(Object.values(neighbors).every(v=>!v)){
+            ctx.lineTo(centerPoint.sx,centerPoint.sy+0.1);
+          }
+          ctx.stroke();
+          ctx.lineWidth=1;
+        }
+
+        const buildingStyles={
+          CASTLE:{color:"#d6d6d6",height:18,inset:0.58},
+          CITY:{color:"#cfd5e8",height:16,inset:0.6},
+          VILLAGE:{color:"#d9b07b",height:12,inset:0.64},
+          TOWER:{color:"#c6c0ea",height:22,inset:0.64},
+          FARM:{color:"#c9a871",height:10,inset:0.68}
+        };
+        if(buildingStyles[tileName]){
+          const {color,height,inset}=buildingStyles[tileName];
+          const baseCenter={sx:center.sx,sy:center.sy+4};
+          const insetPt=(pt)=>({
+            sx:baseCenter.sx+(pt.sx-baseCenter.sx)*inset,
+            sy:baseCenter.sy+(pt.sy-baseCenter.sy)*inset
+          });
+          const bNW=insetPt(pNW),bNE=insetPt(pNE),bSE=insetPt(pSE),bSW=insetPt(pSW);
+          const tNW={sx:bNW.sx,sy:bNW.sy-height};
+          const tNE={sx:bNE.sx,sy:bNE.sy-height};
+          const tSE={sx:bSE.sx,sy:bSE.sy-height};
+          const tSW={sx:bSW.sx,sy:bSW.sy-height};
+          const wallShadow=shadeColor(color,-35);
+          const wallMid=shadeColor(color,-20);
+          const roof=shadeColor(color,20);
+          drawTile(bNW,bSW,tSW,tNW,wallShadow);
+          drawTile(bNE,bSE,tSE,tNE,wallMid);
+          drawTile(bSW,bSE,tSE,tSW,shadeColor(color,-45));
+          drawTile(tNW,tNE,tSE,tSW,roof);
         }
 
         const proj=gameData.projectiles.find(p=>p.x===wx&&p.y===wy);

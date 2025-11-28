@@ -1,6 +1,8 @@
 {
+  "version_start": "RPG v 0.2.0",
   "objects": [
     { "lat": 0, "lon": 0, "size": 1 },
     { "lat": 0.0005, "lon": 0.0005, "size": 1 }
-  ]
+  ],
+  "version_end": "RPG v 0.2.0"
 }

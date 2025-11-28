@@ -379,6 +379,39 @@ function render(){
 
       drawTile(pNW,pNE,pSE,pSW,topColor);
 
+      if (tileName==="ROAD") {
+        const centerPoint = { sx: center.sx, sy: center.sy + 4 };
+        const insetFactor = 0.62;
+        const inset = (pt) => ({
+          sx: centerPoint.sx + (pt.sx - centerPoint.sx) * insetFactor,
+          sy: centerPoint.sy + (pt.sy - centerPoint.sy) * insetFactor,
+        });
+        const rNW = inset(pNW);
+        const rNE = inset(pNE);
+        const rSE = inset(pSE);
+        const rSW = inset(pSW);
+
+        ctx.fillStyle = "#e0e0e0";
+        ctx.beginPath();
+        ctx.moveTo(rNW.sx, rNW.sy);
+        ctx.lineTo(rNE.sx, rNE.sy);
+        ctx.lineTo(rSE.sx, rSE.sy);
+        ctx.lineTo(rSW.sx, rSW.sy);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = "#777";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rNW.sx, rNW.sy);
+        ctx.lineTo(rNE.sx, rNE.sy);
+        ctx.lineTo(rSE.sx, rSE.sy);
+        ctx.lineTo(rSW.sx, rSW.sy);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+
       const center=isoPoint(rx+0.5,ry+0.5,avgH);
       center.sx+=centerX;center.sy+=centerY;
       const proj=gameData.projectiles.find(p=>p.x===wx&&p.y===wy);

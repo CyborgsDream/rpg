@@ -1,10 +1,10 @@
-<!-- RPG v 0.2.0 -->
+<!-- RPG v 0.2.1 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>RPG v 0.2.0</title>
+  <title>RPG v 0.2.1</title>
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -73,8 +73,8 @@
 
 <script>
 // ----- CONFIGURATION -----
-const MAP_WIDTH = 96, MAP_HEIGHT = 32;
-const CAMERA_WIDTH = 48, CAMERA_HEIGHT = 18;
+const MAP_WIDTH = 128, MAP_HEIGHT = 48;
+const CAMERA_WIDTH = 56, CAMERA_HEIGHT = 22;
 const TILE_W = 48, TILE_H = 24, TILE_Z = 12;
 
 const gameData = {
@@ -87,7 +87,10 @@ const gameData = {
     ROAD: { color: "#aaa", passable: true },
     WALL: { color: "#ccc", passable: false },
     CASTLE: { color: "#ccc", passable: false },
-    CITY: { color: "#fa4", passable: true }
+    CITY: { color: "#fa4", passable: true },
+    VILLAGE: { color: "#e7c07d", passable: true },
+    TOWER: { color: "#ccbbee", passable: false },
+    FARM: { color: "#d8bf8e", passable: true }
   },
   specialTiles: {
     NPC: { color: "#0cf" },
@@ -174,10 +177,55 @@ for(let y=0;y<MAP_HEIGHT;y++){
     heightMap[y][x]=h;
   }
 }
-map[10][10]="GRASS";
-for(let yy=10;yy<14;yy++){for(let xx=60;xx<64;xx++){map[yy][xx]="CITY";}}
-for(let xx=59;xx<=64;xx++){map[10][xx]="WALL";map[13][xx]="WALL";}
-for(let yy=10;yy<=13;yy++){map[yy][59]="WALL";map[yy][64]="WALL";}
+
+function carveRoad(x1,y1,x2,y2){
+  let cx=x1, cy=y1;
+  map[cy][cx]="ROAD";
+  while(cx!==x2||cy!==y2){
+    if(Math.abs(x2-cx)>Math.abs(y2-cy)) cx+= (x2>cx?1:-1); else cy+= (y2>cy?1:-1);
+    if(cx>=0&&cy>=0&&cx<MAP_WIDTH&&cy<MAP_HEIGHT) map[cy][cx]="ROAD";
+  }
+}
+
+function placeRect(x,y,w,h,type){
+  for(let yy=y;yy<y+h;yy++){
+    if(yy<0||yy>=MAP_HEIGHT) continue;
+    for(let xx=x;xx<x+w;xx++){
+      if(xx<0||xx>=MAP_WIDTH) continue;
+      map[yy][xx]=type;
+    }
+  }
+}
+
+// City with walls
+for(let yy=10;yy<16;yy++){for(let xx=70;xx<76;xx++){map[yy][xx]="CITY";}}
+for(let xx=69;xx<=76;xx++){map[10][xx]="WALL";map[15][xx]="WALL";}
+for(let yy=10;yy<=15;yy++){map[yy][69]="WALL";map[yy][76]="WALL";}
+
+// Castle keep
+placeRect(32,18,4,4,"CASTLE");
+
+// Rural features
+placeRect(18,28,6,4,"VILLAGE");
+placeRect(22,24,4,3,"FARM");
+placeRect(50,6,3,3,"TOWER");
+placeRect(90,26,5,4,"VILLAGE");
+placeRect(94,22,4,3,"FARM");
+placeRect(112,34,6,4,"CITY");
+
+// Road network linking notable spots
+const roadNodes=[
+  {x:10,y:10}, // spawn
+  {x:32,y:20}, // castle
+  {x:22,y:26}, // village cluster
+  {x:52,y:8},  // tower
+  {x:72,y:12}, // walled city
+  {x:92,y:24}, // village east
+  {x:114,y:36} // eastern city
+];
+for(let i=0;i<roadNodes.length-1;i++){
+  carveRoad(roadNodes[i].x,roadNodes[i].y,roadNodes[i+1].x,roadNodes[i+1].y);
+}
 
 let isRunning=true;
 let score=0;
@@ -314,11 +362,23 @@ function render(){
       const npc=gameData.npcs.find(n=>n.x===wx&&n.y===wy);
       if(npc){ctx.fillStyle=npc.color||gameData.specialTiles.NPC.color;ctx.beginPath();ctx.arc(center.sx,center.sy+4,6,0,Math.PI*2);ctx.fill();}
       if(wx===playerX&&wy===playerY){ctx.fillStyle=gameData.specialTiles.PLAYER;ctx.beginPath();ctx.arc(center.sx,center.sy+4,6,0,Math.PI*2);ctx.fill();}
+      if(wx===playerX&&wy===playerY){
+        ctx.strokeStyle="#ffeb3b";
+        ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(pNW.sx,pNW.sy);
+        ctx.lineTo(pNE.sx,pNE.sy);
+        ctx.lineTo(pSE.sx,pSE.sy);
+        ctx.lineTo(pSW.sx,pSW.sy);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.lineWidth=1;
+      }
     }
   }
 }
 requestAnimationFrame(gameLoop);
 </script>
 </body>
-<!-- RPG v 0.2.0 -->
+<!-- RPG v 0.2.1 -->
 </html>

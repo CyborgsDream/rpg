@@ -179,47 +179,81 @@ let map = Array.from({length: MAP_HEIGHT}, () => Array(MAP_WIDTH).fill("GRASS"))
 
 let heightMap = Array.from({length: MAP_HEIGHT+1}, () => Array(MAP_WIDTH+1).fill(0));
 
-for(let y=0;y<=MAP_HEIGHT;y++){
-  for(let x=0;x<=MAP_WIDTH;x++){
-    let h=Math.floor(Math.random()*4);
-    if(x>0&&y>0){
-      h=Math.round((h+heightMap[y-1][x]+heightMap[y][x-1]+heightMap[y-1][x-1])/4);
-    }else if(x>0){
-      h=Math.round((h+heightMap[y][x-1])/2);
-    }else if(y>0){
-      h=Math.round((h+heightMap[y-1][x])/2);
+function blurHeights(iterations=2){
+  for(let i=0;i<iterations;i++){
+    const next=heightMap.map(arr=>arr.slice());
+    for(let y=0;y<=MAP_HEIGHT;y++){
+      for(let x=0;x<=MAP_WIDTH;x++){
+        let acc=0,count=0;
+        for(let dy=-1;dy<=1;dy++){
+          for(let dx=-1;dx<=1;dx++){
+            const ny=y+dy,nx=x+dx;
+            if(nx<0||ny<0||nx>MAP_WIDTH||ny>MAP_HEIGHT) continue;
+            acc+=heightMap[ny][nx];
+            count++;
+          }
+        }
+        next[y][x]=acc/count;
+      }
     }
-    heightMap[y][x]=h;
+    heightMap=next;
   }
 }
-for(let smooth=0;smooth<2;smooth++){
-  const next=heightMap.map(arr=>arr.slice());
+
+function generateHeightMap(){
+  heightMap = Array.from({length: MAP_HEIGHT+1}, () => Array(MAP_WIDTH+1).fill(0));
+  const addHill=(cx,cy,amp,radius)=>{
+    const minY=Math.max(0,Math.floor(cy-radius));
+    const maxY=Math.min(MAP_HEIGHT,Math.ceil(cy+radius));
+    const minX=Math.max(0,Math.floor(cx-radius));
+    const maxX=Math.min(MAP_WIDTH,Math.ceil(cx+radius));
+    for(let y=minY;y<=maxY;y++){
+      for(let x=minX;x<=maxX;x++){
+        const dx=x-cx,dy=y-cy;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist>radius) continue;
+        const falloff=Math.pow(1-dist/radius,2);
+        heightMap[y][x]+=amp*falloff;
+      }
+    }
+  };
+
+  const hillCount=70;
+  for(let i=0;i<hillCount;i++){
+    const cx=Math.random()*MAP_WIDTH;
+    const cy=Math.random()*MAP_HEIGHT;
+    const radius=8+Math.random()*14;
+    const amp=-2+Math.random()*10; // some valleys, some peaks
+    addHill(cx,cy,amp,radius);
+  }
+
+  blurHeights(3);
+
+  // Emphasize relief so water, hills and peaks feel distinct
   for(let y=0;y<=MAP_HEIGHT;y++){
     for(let x=0;x<=MAP_WIDTH;x++){
-      let acc=0,count=0;
-      for(let dy=-1;dy<=1;dy++){
-        for(let dx=-1;dx<=1;dx++){
-          const ny=y+dy,nx=x+dx;
-          if(nx<0||ny<0||nx>MAP_WIDTH||ny>MAP_HEIGHT) continue;
-          acc+=heightMap[ny][nx];
-          count++;
-        }
-      }
-      next[y][x]=Math.round(acc/count*0.9);
+      heightMap[y][x]=Math.round(heightMap[y][x]*1.2);
     }
   }
-  heightMap=next;
+
+  blurHeights(1);
 }
+
+generateHeightMap();
 
 for(let y=0;y<MAP_HEIGHT;y++){
   for(let x=0;x<MAP_WIDTH;x++){
     const avgH=(heightMap[y][x]+heightMap[y+1][x]+heightMap[y][x+1]+heightMap[y+1][x+1])/4;
-    if(avgH<=0){
-      map[y][x]=Math.random()<0.75?"WATER":"GRASS";
-    }else if(avgH<2){
-      map[y][x]=Math.random()<0.28?"FOREST":"GRASS";
+    if(avgH<-1){
+      map[y][x]="WATER";
+    }else if(avgH<1){
+      map[y][x]=Math.random()<0.65?"GRASS":"WATER";
+    }else if(avgH<3){
+      map[y][x]=Math.random()<0.35?"FOREST":"GRASS";
+    }else if(avgH<6){
+      map[y][x]=Math.random()<0.6?"HILL":"FOREST";
     }else{
-      map[y][x]=Math.random()<0.7?"HILL":"MOUNTAIN";
+      map[y][x]=Math.random()<0.35?"MOUNTAIN":"HILL";
     }
   }
 }
@@ -239,6 +273,12 @@ function carveRoad(x1,y1,x2,y2,width=1){
   while(cx!==x2||cy!==y2){
     if(Math.abs(x2-cx)>Math.abs(y2-cy)) cx+= (x2>cx?1:-1); else cy+= (y2>cy?1:-1);
     roadBrush(cx,cy,width);
+  }
+}
+
+function carvePolyline(points,width=1){
+  for(let i=0;i<points.length-1;i++){
+    carveRoad(points[i].x,points[i].y,points[i+1].x,points[i+1].y,width);
   }
 }
 
@@ -280,33 +320,17 @@ function placeRect(x,y,w,h,type){
   }
 }
 
-// City with walls
-for(let yy=10;yy<16;yy++){for(let xx=70;xx<76;xx++){map[yy][xx]="CITY";}}
-for(let xx=69;xx<=76;xx++){map[10][xx]="WALL";map[15][xx]="WALL";}
-for(let yy=10;yy<=15;yy++){map[yy][69]="WALL";map[yy][76]="WALL";}
-
-// Castle keep
-placeRect(32,18,4,4,"CASTLE");
-
-// Rural features
-placeRect(18,28,6,4,"VILLAGE");
-placeRect(22,24,4,3,"FARM");
-placeRect(50,6,3,3,"TOWER");
-placeRect(90,26,5,4,"VILLAGE");
-placeRect(94,22,4,3,"FARM");
-placeRect(112,34,6,4,"CITY");
-placeRect(58,14,3,3,"BUILDING");
-placeRect(84,18,4,3,"BUILDING");
-placeRect(104,30,5,3,"BUILDING");
-
-// Road network linking notable spots and adding major arteries
+// Major road network: three clear arterial routes
 const midY=Math.floor(MAP_HEIGHT/2);
 const midX=Math.floor(MAP_WIDTH/2);
-carveRoad(0,midY,MAP_WIDTH-1,midY,2);            // west-east great road
-carveRoad(midX,0,midX,MAP_HEIGHT-1,2);           // north-south trade route
-carveRoad(0,8,MAP_WIDTH-1,midY+6,1);             // diagonal caravan path
-carveRoad(6,midY+10,MAP_WIDTH-12,6,1);           // second diagonal for variety
+const royalRoad=[{x:0,y:midY-2},{x:midX-4,y:midY-2},{x:MAP_WIDTH-1,y:midY}];
+const merchantSpine=[{x:midX,y:0},{x:midX+2,y:midY},{x:midX,y:MAP_HEIGHT-1}];
+const ridgePass=[{x:2,y:8},{x:midX-6,y:midY-6},{x:MAP_WIDTH-6,y:MAP_HEIGHT-10}];
+carvePolyline(royalRoad,2);
+carvePolyline(merchantSpine,2);
+carvePolyline(ridgePass,1);
 
+// Short connectors to bring settlements onto the mains
 const roadNodes=[
   {x:10,y:10}, // spawn
   {x:32,y:20}, // castle
@@ -316,25 +340,37 @@ const roadNodes=[
   {x:92,y:24}, // village east
   {x:114,y:36} // eastern city
 ];
-for(let i=0;i<roadNodes.length-1;i++){
-  carveRoad(roadNodes[i].x,roadNodes[i].y,roadNodes[i+1].x,roadNodes[i+1].y,2);
-}
-
-// Spurs from main arteries to settlements for denser coverage
-const spurConnections=[
-  [{x:midX,y:midY},{x:10,y:10}],
-  [{x:midX,y:midY},{x:70,y:midY-12}],
-  [{x:midX,y:midY},{x:112,y:34}],
-  [{x:midX,y:midY},{x:18,y:30}],
-  [{x:midX,y:midY},{x:90,y:26}]
-];
-spurConnections.forEach(([a,b])=>carveRoad(a.x,a.y,b.x,b.y));
+carvePolyline([{x:10,y:10},{x:22,y:26},{x:32,y:20}],2);
+carvePolyline([{x:52,y:8},{x:72,y:12},{x:92,y:24}],1);
+carvePolyline([{x:92,y:24},{x:114,y:36}],2);
 
 smoothRoadHeights();
+
+// City with walls
+for(let yy=10;yy<16;yy++){for(let xx=70;xx<76;xx++){map[yy][xx]="CITY";}}
+for(let xx=69;xx<=76;xx++){map[10][xx]="WALL";map[15][xx]="WALL";}
+for(let yy=10;yy<=15;yy++){map[yy][69]="WALL";map[yy][76]="WALL";}
+
+// Castle keep and settlements
+placeRect(32,18,4,4,"CASTLE");
+placeRect(18,28,6,4,"VILLAGE");
+placeRect(22,24,4,3,"FARM");
+placeRect(50,6,3,3,"TOWER");
+placeRect(90,26,5,4,"VILLAGE");
+placeRect(94,22,4,3,"FARM");
+placeRect(112,34,6,4,"CITY");
+placeRect(58,14,3,3,"BUILDING");
+placeRect(84,18,4,3,"BUILDING");
+placeRect(104,30,5,3,"BUILDING");
+placeRect(14,14,3,3,"BUILDING");
+placeRect(44,26,4,3,"BUILDING");
+placeRect(64,32,4,3,"BUILDING");
+placeRect(76,6,3,3,"BUILDING");
 
 let isRunning=true;
 let score=0;
 let playerX=10,playerY=10;
+let playerFacing='S';
 let walkFrame=0,moveDelay=333,lastMove=0;
 let playerStats={name:"BezImienny",ZYW:100,currentHP:100,SF:60,ZR:50,UM:30,WI:40,SZ:20,PM:20,inventory:[]};
 let rageActive=false,rageTimer=0;
@@ -386,7 +422,50 @@ function shadeColor(col,amt){
   return"#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
 }
 
-function gameLoop(){if(!isRunning) return;let now=Date.now();if(now-lastDayUpdate>1000){dayTime=(dayTime+20)%2400;lastDayUpdate=now;}updateNPCs();updateProjectiles();if(now-lastMove>=moveDelay){let moved=false;if(keys.ArrowUp&&isPassable(playerX,playerY-1)){playerY--;moved=true;}else if(keys.ArrowDown&&isPassable(playerX,playerY+1)){playerY++;moved=true;}else if(keys.ArrowLeft&&isPassable(playerX-1,playerY)){playerX--;moved=true;}else if(keys.ArrowRight&&isPassable(playerX+1,playerY)){playerX++;moved=true;}if(moved){score++;walkFrame=(walkFrame+1)%2;lastMove=now;}else{walkFrame=0;}}else{walkFrame=0;}
+const dirVectors={
+  N:{sx:TILE_W/2,sy:-TILE_H/2},
+  S:{sx:-TILE_W/2,sy:TILE_H/2},
+  E:{sx:TILE_W/2,sy:TILE_H/2},
+  W:{sx:-TILE_W/2,sy:-TILE_H/2}
+};
+function dirVector(facing){return dirVectors[facing]||dirVectors.S;}
+
+function fillPoly(points,color){
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.moveTo(points[0].sx,points[0].sy);
+  for(let i=1;i<points.length;i++) ctx.lineTo(points[i].sx,points[i].sy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPlayerArrow(center,facing){
+  const forward=dirVector(facing);
+  const norm=Math.sqrt(forward.sx*forward.sx+forward.sy*forward.sy)||1;
+  const fUnit={sx:forward.sx/norm,sy:forward.sy/norm};
+  const length=24;
+  const baseOffset=-8;
+  const halfWidth=9;
+  const height=14+Math.sin(Date.now()/180)*2;
+  const base={sx:center.sx+fUnit.sx*baseOffset,sy:center.sy+4+fUnit.sy*baseOffset};
+  const tip={sx:base.sx+fUnit.sx*length,sy:base.sy+fUnit.sy*length};
+  const perp={sx:-fUnit.sy*halfWidth,sy:fUnit.sx*halfWidth};
+  const left={sx:base.sx+perp.sx,sy:base.sy+perp.sy};
+  const right={sx:base.sx-perp.sx,sy:base.sy-perp.sy};
+  const topShift={sx:0,sy:-height};
+  const tTip={sx:tip.sx+topShift.sx,sy:tip.sy+topShift.sy};
+  const tLeft={sx:left.sx+topShift.sx,sy:left.sy+topShift.sy};
+  const tRight={sx:right.sx+topShift.sx,sy:right.sy+topShift.sy};
+  const body=shadeColor(gameData.specialTiles.PLAYER,-5);
+  const shadow=shadeColor(body,-35);
+  const highlight=shadeColor(body,30);
+  fillPoly([left,right,tRight,tLeft],shadow);
+  fillPoly([tip,right,tRight,tTip],shadeColor(body,-15));
+  fillPoly([tip,left,tLeft,tTip],shadeColor(body,-5));
+  fillPoly([tTip,tRight,tLeft],highlight);
+}
+
+function gameLoop(){if(!isRunning) return;let now=Date.now();if(now-lastDayUpdate>1000){dayTime=(dayTime+20)%2400;lastDayUpdate=now;}updateNPCs();updateProjectiles();if(now-lastMove>=moveDelay){let moved=false;const moveOptions=[{key:'ArrowUp',dx:0,dy:-1,facing:'N'},{key:'ArrowDown',dx:0,dy:1,facing:'S'},{key:'ArrowLeft',dx:-1,dy:0,facing:'W'},{key:'ArrowRight',dx:1,dy:0,facing:'E'}];for(const opt of moveOptions){if(keys[opt.key]){playerFacing=opt.facing;const nx=playerX+opt.dx,ny=playerY+opt.dy;if(isPassable(nx,ny)){playerX=nx;playerY=ny;moved=true;}break;}}if(moved){score++;walkFrame=(walkFrame+1)%2;lastMove=now;}else{walkFrame=0;}}else{walkFrame=0;}
 let it=gameData.items.find(i=>!i.taken&&i.x===playerX&&i.y===playerY);if(it){messagesDiv.textContent=`You see a ${it.name}. Press (T) to take.`;if(keys.t||keys.T){it.taken=true;playerStats.inventory.push(it.name);messagesDiv.textContent=`You took ${it.name}!`;}}
 if(keys.i||keys.I){messagesDiv.textContent=`Inventory: [${playerStats.inventory.join(", ")}]`;}
 let npc=gameData.npcs.find(n=>isAdjacent(playerX,playerY,n.x,n.y));if(npc){let st=npc.state;if(st>=npc.dialogues.length) st=npc.dialogues.length-1;dialoguesDiv.textContent=npc.dialogues[st];if(keys.e||keys.E){let line=npc.dialogues[npc.state];if(line.includes("(G)ood or (E)vil?")){if(keys.g||keys.G) npc.state+=2;else if(keys.e||keys.E) npc.state+=3;else npc.state++;}else if(line.includes("(Y/N)")){if(keys.y||keys.Y) npc.state+=2;else if(keys.n||keys.N) npc.state+=3;else npc.state++;}else{npc.state++;}if(npc.state>=npc.dialogues.length){npc.state=npc.dialogues.length-1;}}}
@@ -475,36 +554,31 @@ function render(){
             E:isRoad(wx+1,wy)
           };
 
-          ctx.lineCap="round";
-          ctx.strokeStyle="#dcd7c8";
-          ctx.lineWidth=10;
-          ctx.beginPath();
-          ctx.moveTo(centerPoint.sx,centerPoint.sy);
-          for(const dir of Object.keys(neighbors)){
-            if(neighbors[dir]){
-              ctx.lineTo(edges[dir].pt.sx,edges[dir].pt.sy);
-              ctx.moveTo(centerPoint.sx,centerPoint.sy);
+          const dirOrder=["N","E","S","W"];
+          const strokeRoad=(width,color,dash=[])=>{
+            ctx.lineCap="round";
+            ctx.lineJoin="round";
+            ctx.setLineDash(dash);
+            ctx.strokeStyle=color;
+            ctx.lineWidth=width;
+            ctx.beginPath();
+            ctx.moveTo(centerPoint.sx,centerPoint.sy);
+            let drew=false;
+            for(const dir of dirOrder){
+              if(neighbors[dir]){
+                ctx.lineTo(edges[dir].pt.sx,edges[dir].pt.sy);
+                ctx.moveTo(centerPoint.sx,centerPoint.sy);
+                drew=true;
+              }
             }
-          }
-          if(Object.values(neighbors).every(v=>!v)){
-            ctx.lineTo(centerPoint.sx,centerPoint.sy+0.1);
-          }
-          ctx.stroke();
+            if(!drew){ctx.lineTo(centerPoint.sx,centerPoint.sy+0.1);} // isolated paving
+            ctx.stroke();
+            ctx.setLineDash([]);
+          };
 
-          ctx.strokeStyle="#9b9484";
-          ctx.lineWidth=4;
-          ctx.beginPath();
-          ctx.moveTo(centerPoint.sx,centerPoint.sy);
-          for(const dir of Object.keys(neighbors)){
-            if(neighbors[dir]){
-              ctx.lineTo(edges[dir].pt.sx,edges[dir].pt.sy);
-              ctx.moveTo(centerPoint.sx,centerPoint.sy);
-            }
-          }
-          if(Object.values(neighbors).every(v=>!v)){
-            ctx.lineTo(centerPoint.sx,centerPoint.sy+0.1);
-          }
-          ctx.stroke();
+          strokeRoad(14,shadeColor("#c2ad88",-avgH));
+          strokeRoad(10,shadeColor("#e8dfcd",-avgH));
+          strokeRoad(2,shadeColor("#fff3bf",-avgH),[6,6]);
           ctx.lineWidth=1;
         }
 
@@ -543,7 +617,7 @@ function render(){
       if(it){ctx.fillStyle=gameData.specialTiles.ITEM.color;ctx.beginPath();ctx.moveTo(center.sx,center.sy+2);ctx.lineTo(center.sx+4,center.sy+TILE_H/2);ctx.lineTo(center.sx,center.sy+TILE_H-2);ctx.lineTo(center.sx-4,center.sy+TILE_H/2);ctx.closePath();ctx.fill();}
       const npc=gameData.npcs.find(n=>n.x===wx&&n.y===wy);
       if(npc){ctx.fillStyle=npc.color||gameData.specialTiles.NPC.color;ctx.beginPath();ctx.arc(center.sx,center.sy+4,6,0,Math.PI*2);ctx.fill();}
-      if(wx===playerX&&wy===playerY){ctx.fillStyle=gameData.specialTiles.PLAYER;ctx.beginPath();ctx.arc(center.sx,center.sy+4,6,0,Math.PI*2);ctx.fill();}
+      if(wx===playerX&&wy===playerY){drawPlayerArrow(center,playerFacing);}
       if(wx===playerX&&wy===playerY){
         ctx.strokeStyle="#ffeb3b";
         ctx.lineWidth=2;
